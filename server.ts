@@ -7,7 +7,7 @@ import Razorpay from 'razorpay';
 import crypto from 'crypto';
 
 const app = express();
-const PORT = 3000;
+const PORT = 8980;
 
 app.use(express.json());
 
