@@ -1,5 +1,6 @@
 import React, { useEffect, Suspense, lazy, useState, useRef } from 'react';
 import { useLocation, Link } from 'react-router-dom';
+import { useCMS } from '../components/CMSContext';
 import { motion } from 'motion/react';
 import { AnimatedSection } from '../components/ui/AnimatedSection';
 import { SEO } from '../components/SEO';
@@ -181,6 +182,10 @@ function SplineRobotViewer({ sceneUrl }: { sceneUrl: string }) {
 
 export function Home() {
   const location = useLocation();
+  const { db } = useCMS();
+
+  const heroTitle = db?.pages?.home?.heroTitle || 'TRUSTED AI FOR ENTERPRISE.';
+  const heroSubtitle = db?.pages?.home?.heroSubtitle || 'INDEPENDENT QUALITY ASSURANCE, MANAGED DELIVERY, AND GOVERNANCE IN ONE PLATFORM.';
 
   // Scroll to section if defined in URL query
   useEffect(() => {
@@ -265,14 +270,20 @@ export function Home() {
                 margin: '0 0 24px 0',
               }}
             >
-              TRUSTED AI<br />
-              <span style={{ color: '#ffffff' }}>FOR</span><br />
-              <span style={{
-                backgroundImage: 'linear-gradient(90deg, #a78bfa, #60a5fa)',
-                WebkitBackgroundClip: 'text',
-                WebkitTextFillColor: 'transparent',
-                backgroundClip: 'text',
-              }}>ENTERPRISE.</span>
+              {heroTitle.split('FOR').length > 1 ? (
+                <>
+                  {heroTitle.split('FOR')[0]}<br />
+                  <span style={{ color: '#ffffff' }}>FOR</span><br />
+                  <span style={{
+                    backgroundImage: 'linear-gradient(90deg, #a78bfa, #60a5fa)',
+                    WebkitBackgroundClip: 'text',
+                    WebkitTextFillColor: 'transparent',
+                    backgroundClip: 'text',
+                  }}>{heroTitle.split('FOR')[1].trim()}</span>
+                </>
+              ) : (
+                heroTitle
+              )}
             </motion.h1>
 
             {/* Subtitle */}
@@ -291,8 +302,7 @@ export function Home() {
                 margin: '0 0 40px 0',
               }}
             >
-              INDEPENDENT QUALITY ASSURANCE, MANAGED DELIVERY,
-              AND GOVERNANCE IN ONE PLATFORM.
+              {heroSubtitle}
             </motion.p>
 
             {/* CTA Buttons */}

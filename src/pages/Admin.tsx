@@ -9,7 +9,7 @@ export function Admin() {
   const [error, setError] = useState('');
   
   const [db, setDb] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState<'courses' | 'media' | 'enquiries' | 'orders' | 'settings'>('courses');
+  const [activeTab, setActiveTab] = useState<'pages' | 'courses' | 'media' | 'enquiries' | 'orders' | 'settings'>('pages');
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
 
@@ -117,6 +117,9 @@ export function Admin() {
         </div>
         
         <nav className="flex-1 space-y-2">
+          <button onClick={() => setActiveTab('pages')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-sm text-left transition-colors ${activeTab === 'pages' ? 'bg-primary text-white' : 'text-silver hover:bg-ink-light'}`}>
+            <BookOpen size={18} /> Page Content
+          </button>
           <button onClick={() => setActiveTab('courses')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-sm text-left transition-colors ${activeTab === 'courses' ? 'bg-primary text-white' : 'text-silver hover:bg-ink-light'}`}>
             <GraduationCap size={18} /> Academy Courses
           </button>
@@ -145,13 +148,64 @@ export function Admin() {
           <h2 className="text-3xl font-bold font-heading text-ink capitalize">{activeTab} Management</h2>
           <div className="flex items-center gap-4">
             {saveMessage && <span className="text-sm font-bold text-green-600 flex items-center gap-1"><CheckCircle2 size={16}/> {saveMessage}</span>}
-            {(activeTab === 'courses' || activeTab === 'media' || activeTab === 'settings') && (
+            {(activeTab === 'pages' || activeTab === 'courses' || activeTab === 'media' || activeTab === 'settings') && (
               <button onClick={handleSave} disabled={isSaving} className="px-6 py-2 bg-ink text-white font-bold rounded-sm shadow-lg hover:bg-primary transition-colors disabled:opacity-50">
                 {isSaving ? 'Saving...' : 'Save Database'}
               </button>
             )}
           </div>
         </div>
+
+        {/* Pages Content Editor */}
+        {activeTab === 'pages' && (() => {
+          const updatePage = (pageKey: string, fieldKey: string, value: string) => {
+            const newDb = { ...db };
+            if (!newDb.pages) newDb.pages = {};
+            if (!newDb.pages[pageKey]) newDb.pages[pageKey] = {};
+            newDb.pages[pageKey][fieldKey] = value;
+            setDb(newDb);
+          };
+
+          return (
+            <div className="space-y-6">
+              <div className="bg-white p-8 rounded-sm shadow-sm border border-silver/30 max-w-4xl">
+                <h3 className="text-xl font-bold font-heading mb-6 border-b border-silver/20 pb-4">Home Page Content</h3>
+                <div className="space-y-5">
+                  <div>
+                    <label className="block text-sm font-bold text-ink mb-2">Hero Title</label>
+                    <input type="text" value={db.pages?.home?.heroTitle || 'TRUSTED AI FOR ENTERPRISE.'} 
+                          onChange={e => updatePage('home', 'heroTitle', e.target.value)} 
+                          className="w-full p-3 bg-silver-light/30 border border-silver/30 rounded-sm text-sm focus:outline-none focus:border-primary shadow-inner" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-ink mb-2">Hero Subtitle</label>
+                    <textarea value={db.pages?.home?.heroSubtitle || 'INDEPENDENT QUALITY ASSURANCE, MANAGED DELIVERY, AND GOVERNANCE IN ONE PLATFORM.'} 
+                          onChange={e => updatePage('home', 'heroSubtitle', e.target.value)} 
+                          className="w-full p-3 bg-silver-light/30 border border-silver/30 rounded-sm text-sm focus:outline-none focus:border-primary shadow-inner" rows={2} />
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white p-8 rounded-sm shadow-sm border border-silver/30 max-w-4xl">
+                <h3 className="text-xl font-bold font-heading mb-6 border-b border-silver/20 pb-4">Services Page Content</h3>
+                <div className="space-y-5">
+                  <div>
+                    <label className="block text-sm font-bold text-ink mb-2">Hero Title</label>
+                    <input type="text" value={db.pages?.services?.heroTitle || 'Our Services'} 
+                          onChange={e => updatePage('services', 'heroTitle', e.target.value)} 
+                          className="w-full p-3 bg-silver-light/30 border border-silver/30 rounded-sm text-sm focus:outline-none focus:border-primary shadow-inner" />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-ink mb-2">Hero Subtitle</label>
+                    <textarea value={db.pages?.services?.heroSubtitle || 'Trusted AI, proven and accountable. We help organizations deploy AI they can stand behind.'} 
+                          onChange={e => updatePage('services', 'heroSubtitle', e.target.value)} 
+                          className="w-full p-3 bg-silver-light/30 border border-silver/30 rounded-sm text-sm focus:outline-none focus:border-primary shadow-inner" rows={2} />
+                  </div>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
 
         {/* Courses Editor */}
         {activeTab === 'courses' && (

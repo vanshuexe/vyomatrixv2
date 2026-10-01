@@ -242,6 +242,28 @@
       "honeypot": "",
       "id": "ENQ-1789386071889",
       "date": "2026-09-14T11:41:11.889Z"
+    },
+    {
+      "type": "Academy Enrolment",
+      "details": {
+        "name": "ddbd",
+        "email": "flarelax12@gmail.com",
+        "phone": "65656699666",
+        "city": "dddjd",
+        "track": "Business track",
+        "organization": "rjbrr",
+        "coupon": "",
+        "gateway": "razorpay",
+        "programId": "one-day",
+        "programTitle": "One-day Executive Workshop",
+        "amountINR": 4999,
+        "price": "INR 4,999"
+      },
+      "paymentId": "pay_ThwxMbAB9Ki5be",
+      "orderId": "order_Thwx8pDdh8Kj75",
+      "adminStatus": "Payment Verified",
+      "id": "ENQ-1790706175404",
+      "date": "2026-09-29T18:22:55.404Z"
     }
   ],
   "settings": {

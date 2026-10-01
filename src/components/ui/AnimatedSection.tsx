@@ -1,5 +1,5 @@
 import React from 'react';
-import { motion } from 'motion/react';
+
 
 interface AnimatedSectionProps {
   children: React.ReactNode;
@@ -18,28 +18,25 @@ export function AnimatedSection({
   direction = 'up'
 }: AnimatedSectionProps) {
   
-  const getVariants = () => {
+  const getAosAnimation = () => {
     switch (direction) {
-      case 'up': return { hidden: { opacity: 0, y: 30 }, visible: { opacity: 1, y: 0 } };
-      case 'down': return { hidden: { opacity: 0, y: -30 }, visible: { opacity: 1, y: 0 } };
-      case 'left': return { hidden: { opacity: 0, x: 30 }, visible: { opacity: 1, x: 0 } };
-      case 'right': return { hidden: { opacity: 0, x: -30 }, visible: { opacity: 1, x: 0 } };
-      case 'none': return { hidden: { opacity: 0 }, visible: { opacity: 1 } };
-      default: return { hidden: { opacity: 0, y: 30 }, visible: { opacity: 1, y: 0 } };
+      case 'up': return 'fade-up';
+      case 'down': return 'fade-down';
+      case 'left': return 'fade-left';
+      case 'right': return 'fade-right';
+      case 'none': return 'fade';
+      default: return 'fade-up';
     }
   };
 
   return (
-    <motion.div
-      initial="hidden"
-      whileInView="visible"
-      viewport={{ once: false, amount: 0.1 }}
-      transition={{ duration: 0.7, delay, ease: [0.16, 1, 0.3, 1] }}
-      variants={getVariants()}
+    <div
+      data-aos={getAosAnimation()}
+      data-aos-delay={delay ? delay * 1000 : 0}
       className={className}
       style={style}
     >
       {children}
-    </motion.div>
+    </div>
   );
 }

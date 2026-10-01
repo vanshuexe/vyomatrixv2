@@ -14,15 +14,33 @@ import { Contact } from './pages/Contact';
 import { Admin } from './pages/Admin';
 import { Login } from './pages/Login';
 import { Dashboard } from './pages/Dashboard';
+import { Services } from './pages/Services';
+import { Registration } from './pages/Registration';
+import { CMSProvider } from './components/CMSContext';
+import { useEffect } from 'react';
+import AOS from 'aos';
+import 'aos/dist/aos.css';
 
 export default function App() {
+  useEffect(() => {
+    AOS.init({
+      duration: 800,
+      once: false,
+      mirror: true, // animates elements when scrolling up as well
+      offset: 100,
+    });
+  }, []);
+
   return (
-    <HelmetProvider>
-      <BrowserRouter>
+    <CMSProvider>
+      <HelmetProvider>
+        <BrowserRouter>
         <Routes>
           <Route path="/" element={<Layout />}>
             <Route index element={<Home />} />
+            <Route path="services" element={<Services />} />
             <Route path="academy" element={<Academy />} />
+            <Route path="register" element={<Registration />} />
             <Route path="academy/checkout/:id" element={<Checkout />} />
             <Route path="checkout" element={<Checkout />} />
             <Route path="media" element={<Media />} />
@@ -35,5 +53,6 @@ export default function App() {
         </Routes>
       </BrowserRouter>
     </HelmetProvider>
+    </CMSProvider>
   );
 }

@@ -3,6 +3,7 @@ import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Menu, X, ArrowUpRight, Linkedin, Twitter, Mail, LogIn, User } from 'lucide-react';
 import { ChatWidget } from './ChatWidget';
 import { NavbarLogo } from './NavbarLogo';
+import { AnimatedSection } from './ui/AnimatedSection';
 
 export function Layout() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -22,6 +23,7 @@ export function Layout() {
 
   const navLinks = [
     { name: 'Home', path: '/' },
+    { name: 'Services', path: '/services' },
     { name: 'Academy', path: '/academy' },
     { name: 'Media', path: '/media' },
   ];
@@ -113,12 +115,12 @@ export function Layout() {
         </div>
       )}
 
-      <main className="flex-1 flex flex-col">
+      <main className="flex-1 flex flex-col pt-20">
         <Outlet />
       </main>
 
-      <footer className="bg-primary-dark text-white pt-20 pb-10">
-        <div className="max-w-7xl mx-auto px-6">
+      <footer className="bg-primary-dark text-white pt-20 pb-10 overflow-hidden">
+        <AnimatedSection className="max-w-7xl mx-auto px-6">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-12 md:gap-8 mb-16">
             <div className="md:col-span-2">
               <div className="flex items-center gap-2 mb-6">
@@ -167,7 +169,7 @@ export function Layout() {
               <Link to="#" className="hover:text-white transition-colors">Terms of Service</Link>
             </div>
           </div>
-        </div>
+        </AnimatedSection>
       </footer>
       <ChatWidget />
     </div>
