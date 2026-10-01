@@ -26,6 +26,7 @@ export function Layout() {
     { name: 'Services', path: '/services' },
     { name: 'Academy', path: '/academy' },
     { name: 'Media', path: '/media' },
+    { name: 'Register', path: '/register' },
   ];
 
   const isCurrentPath = (path: string) => {
@@ -151,6 +152,7 @@ export function Layout() {
                 <li><Link to="/?section=managed" className="hover:text-white transition-colors">Managed AI Services</Link></li>
                 <li><Link to="/?section=platform" className="hover:text-white transition-colors">Governance Platform</Link></li>
                 <li><Link to="/academy" className="hover:text-white transition-colors">Vyomatrix Academy</Link></li>
+                <li><Link to="/register" className="hover:text-white transition-colors">Student Registration</Link></li>
               </ul>
             </div>
             <div>

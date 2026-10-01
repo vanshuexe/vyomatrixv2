@@ -62,6 +62,7 @@ export function Registration() {
     e.preventDefault();
     
     if (!validateForm()) {
+      alert('Please fill out all required fields marked with *');
       const firstError = document.querySelector('.text-red-500');
       if (firstError) firstError.scrollIntoView({ behavior: 'smooth', block: 'center' });
       return;
@@ -77,8 +78,11 @@ export function Registration() {
     setIsSubmitting(true);
     
     try {
-      // Simulation of API call
-      await new Promise(resolve => setTimeout(resolve, 1500));
+      await fetch('/api/contact', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...formData, type: 'Registration' })
+      });
       setIsSuccess(true);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err) {
@@ -97,9 +101,9 @@ export function Registration() {
             <div className="w-20 h-20 bg-green-500 rounded-full flex items-center justify-center mx-auto mb-8 shadow-lg shadow-green-500/20 text-white">
               <Check size={40} strokeWidth={3} />
             </div>
-            <h2 className="text-3xl font-bold mb-4 text-ink font-heading">Registration Successful</h2>
+            <h2 className="text-3xl font-bold mb-4 text-ink font-heading">Registration Done</h2>
             <p className="text-lg text-ink/70 mb-10 leading-relaxed max-w-lg mx-auto">
-              Thank you for registering, <strong className="text-primary">{formData.name}</strong>. Your details have been successfully captured.
+              We will contact with you as soon possible.
             </p>
             <Button to="/" variant="primary" className="px-10 py-4 font-bold shadow-lg shadow-primary/20">
               Return to Homepage

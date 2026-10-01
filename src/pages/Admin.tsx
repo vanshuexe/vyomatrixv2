@@ -9,7 +9,7 @@ export function Admin() {
   const [error, setError] = useState('');
   
   const [db, setDb] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState<'pages' | 'courses' | 'media' | 'enquiries' | 'orders' | 'settings'>('pages');
+  const [activeTab, setActiveTab] = useState<'pages' | 'courses' | 'media' | 'enquiries' | 'orders' | 'settings' | 'registrations'>('pages');
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
 
@@ -127,7 +127,10 @@ export function Admin() {
             <FileText size={18} /> Media & Posts
           </button>
           <button onClick={() => setActiveTab('enquiries')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-sm text-left transition-colors ${activeTab === 'enquiries' ? 'bg-primary text-white' : 'text-silver hover:bg-ink-light'}`}>
-            <Database size={18} /> Enquiries ({db.enquiries?.filter((e: any) => e.type !== 'Academy Enrolment').length || 0})
+            <Database size={18} /> Enquiries ({db.enquiries?.filter((e: any) => e.type !== 'Academy Enrolment' && e.type !== 'Registration').length || 0})
+          </button>
+          <button onClick={() => setActiveTab('registrations')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-sm text-left transition-colors ${activeTab === 'registrations' ? 'bg-primary text-white' : 'text-silver hover:bg-ink-light'}`}>
+            <User size={18} /> Registrations ({db.enquiries?.filter((e: any) => e.type === 'Registration').length || 0})
           </button>
           <button onClick={() => setActiveTab('orders')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-sm text-left transition-colors ${activeTab === 'orders' ? 'bg-primary text-white' : 'text-silver hover:bg-ink-light'}`}>
             <CheckCircle2 size={18} /> Orders ({db.enquiries?.filter((e: any) => e.type === 'Academy Enrolment').length || 0})
@@ -267,7 +270,7 @@ export function Admin() {
 
         {/* Enquiries Viewer */}
         {activeTab === 'enquiries' && (() => {
-          const enquiries = [...(db.enquiries || [])].filter((e: any) => e.type !== 'Academy Enrolment').reverse();
+          const enquiries = [...(db.enquiries || [])].filter((e: any) => e.type !== 'Academy Enrolment' && e.type !== 'Registration').reverse();
           return (
             <div className="space-y-4">
               {/* Stats */}
@@ -352,6 +355,77 @@ export function Admin() {
                         <a href={`mailto:${enq.email}?subject=Re: Your Inquiry - ${enq.interest}`} className="text-xs font-bold text-primary hover:underline flex items-center gap-1">
                           <Mail size={12} /> Reply via Email
                         </a>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* Registrations Viewer */}
+        {activeTab === 'registrations' && (() => {
+          const registrations = [...(db.enquiries || [])].filter((e: any) => e.type === 'Registration').reverse();
+          return (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4 mb-2">
+                <div className="bg-white border border-silver/30 rounded-sm p-5 shadow-sm">
+                  <div className="text-2xl font-bold text-ink font-heading">{registrations.length}</div>
+                  <div className="text-xs text-silver font-bold uppercase tracking-wider mt-1">Total Registrations</div>
+                </div>
+              </div>
+
+              {registrations.length === 0 ? (
+                <div className="bg-white border border-silver/30 rounded-sm p-16 text-center text-silver shadow-sm">
+                  <User size={48} className="mx-auto mb-4 opacity-30" />
+                  <p className="font-medium">No registrations received yet.</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {registrations.map((reg: any, i: number) => (
+                    <div key={i} className="bg-white border border-silver/20 rounded-sm shadow-sm overflow-hidden">
+                      <div className="flex flex-wrap items-center justify-between gap-3 px-6 py-4 border-b border-silver/10 bg-silver-light/20">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-bold text-sm flex-shrink-0">
+                            {(reg.name || '?')[0].toUpperCase()}
+                          </div>
+                          <div>
+                            <div className="font-bold text-ink">{reg.name || 'Unknown'}</div>
+                            <div className="text-xs text-silver">{reg.email}</div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3 flex-wrap">
+                          <span className="text-xs font-mono text-silver">
+                            {reg.date ? new Date(reg.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : ''}{' '}
+                            {reg.date ? new Date(reg.date).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : ''}
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="px-6 py-5 grid md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <div className="text-xs font-bold text-silver uppercase tracking-wider mb-3">Academic & Personal Info</div>
+                          <div className="text-sm text-ink"><span className="font-bold">Education:</span> {reg.education}</div>
+                          <div className="text-sm text-ink"><span className="font-bold">College:</span> {reg.college}</div>
+                          <div className="text-sm text-ink"><span className="font-bold">Location:</span> {reg.city}, {reg.state}, {reg.country}</div>
+                          <div className="text-sm text-ink"><span className="font-bold">Status:</span> {reg.status}</div>
+                        </div>
+                        
+                        <div className="space-y-2">
+                          <div className="text-xs font-bold text-silver uppercase tracking-wider mb-3">Interests & Contact</div>
+                          <div className="text-sm text-ink"><span className="font-bold">Phone:</span> {reg.phone}</div>
+                          <div className="text-sm text-ink"><span className="font-bold">Referred By:</span> {reg.referredBy || 'None'}</div>
+                          
+                          <div className="mt-3">
+                            <span className="text-xs font-bold text-silver uppercase tracking-wider">Interests:</span>
+                            <div className="flex gap-2 mt-2">
+                              {reg.onSiteWorkshop && <span className="px-2 py-1 bg-blue-100 text-blue-800 text-xs font-bold rounded-sm">On-site Workshop</span>}
+                              {reg.demo && <span className="px-2 py-1 bg-green-100 text-green-800 text-xs font-bold rounded-sm">Demo</span>}
+                              {reg.bootcamp && <span className="px-2 py-1 bg-purple-100 text-purple-800 text-xs font-bold rounded-sm">Bootcamp</span>}
+                            </div>
+                          </div>
+                        </div>
                       </div>
                     </div>
                   ))}
