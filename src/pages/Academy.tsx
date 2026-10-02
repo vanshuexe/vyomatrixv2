@@ -11,7 +11,9 @@ export function Academy() {
       title: 'One-day workshop',
       desc: 'A focused 3 to 4 hour introduction to the world of AI evaluation.',
       duration: '3-4 hours',
-      price: 'INR 4,999',
+      price: 'INR 2,499',
+      originalPrice: 'INR 4,999',
+      offerLabel: 'Introductory offer · 50% off',
       date: 'Starts soon',
       tracks: ['Business track', 'Technology track'],
       highlights: ['Intensive crash course', 'Practical intro to evaluation']
@@ -171,7 +173,19 @@ export function Academy() {
                   <div className="p-8 border-t border-silver/10 flex flex-col sm:flex-row items-start sm:items-center justify-between bg-silver-light/20 gap-6">
                     <div>
                       <div className="text-xs text-silver mb-1 uppercase tracking-wider font-bold">Tuition Investment</div>
-                      <div className="text-3xl font-bold text-ink">{program.price}</div>
+                      <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                        {program.originalPrice && (
+                          <span className="text-base font-medium text-silver line-through">
+                            {program.originalPrice}
+                          </span>
+                        )}
+                        <span className="text-3xl font-bold text-ink">{program.price}</span>
+                      </div>
+                      {program.offerLabel && (
+                        <div className="mt-1 text-sm font-semibold text-primary">
+                          {program.offerLabel}
+                        </div>
+                      )}
                     </div>
                     {/* Route to actual checkout integration */}
                     <Button to={`/checkout?program=${program.id}`} variant="primary" className="shadow-md shadow-primary/20 w-full sm:w-auto px-8 py-3">

@@ -61,6 +61,18 @@ export function Checkout() {
     name: '', email: '', phone: '', city: '', track: 'Business track', organization: '', coupon: '', gateway: 'razorpay'
   });
 
+  useEffect(() => {
+    const savedDetails = sessionStorage.getItem('vyomatrix_checkout_details');
+    if (savedDetails) {
+      try {
+        setFormData(prev => ({ ...prev, ...JSON.parse(savedDetails) }));
+        sessionStorage.removeItem('vyomatrix_checkout_details');
+      } catch (err) {
+        console.error('Failed to restore registration details', err);
+      }
+    }
+  }, []);
+
   const loadRazorpayScript = () => {
     return new Promise((resolve) => {
       const script = document.createElement('script');
@@ -546,7 +558,15 @@ export function Checkout() {
 
                 <div className="py-5 flex items-center justify-between font-bold text-2xl text-ink border-t border-silver/20">
                   <span>Total</span>
-                  <span className="text-primary">{program.price}</span>
+                  <span className="text-right">
+                    {program.originalPrice && (
+                      <span className="block text-xs text-silver line-through">{program.originalPrice}</span>
+                    )}
+                    <span className="block text-primary">{program.price}</span>
+                    {program.offerLabel && (
+                      <span className="block text-xs font-semibold text-primary/80">{program.offerLabel}</span>
+                    )}
+                  </span>
                 </div>
                 <div className="text-xs text-ink/50 text-right -mt-4 mb-6">(Inclusive of all applicable taxes)</div>
                 

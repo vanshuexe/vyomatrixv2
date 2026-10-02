@@ -4,6 +4,8 @@ export interface Course {
   desc: string;
   duration: string;
   price: string;
+  originalPrice?: string;
+  offerLabel?: string;
   date: string;
   tracks: string[];
   level: string;
@@ -16,7 +18,9 @@ export const academyPrograms: Course[] = [
     title: 'One-day Executive Workshop',
     desc: 'A high-intensity, focused masterclass designed to rapidly upskill teams and individuals in AI quality fundamentals, risk assessment, and basic prompt engineering without the time commitment of a full bootcamp.',
     duration: '3-4 hours live',
-    price: 'INR 4,999',
+    price: 'INR 2,499',
+    originalPrice: 'INR 4,999',
+    offerLabel: 'Introductory offer · 50% off',
     date: 'Next cohort: Starts soon',
     tracks: ['Business track', 'Technology track'],
     level: 'Beginner to Intermediate',

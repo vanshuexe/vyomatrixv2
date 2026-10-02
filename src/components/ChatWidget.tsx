@@ -30,10 +30,10 @@ export function ChatWidget() {
       return 'The Vyomatrix Platform is a unified suite for AI quality, governance, and accountability with configurable risk evaluation modules and immutable audit trails.';
     }
     if (lower.includes('academy') || lower.includes('course') || lower.includes('bootcamp') || lower.includes('train') || lower.includes('learn') || lower.includes('workshop')) {
-      return 'Vyomatrix Academy offers practical training in AI evaluation & safety. Courses include the 1-Day AI Quality Workshop ($199), 4-Week AI Auditor Bootcamp ($999), and Advanced AI Safety Masterclass ($499).';
+      return 'Vyomatrix Academy offers practical training in AI evaluation & safety. The One-day Executive Workshop is currently available at INR 2,499 as an introductory 50% off offer (regularly INR 4,999).';
     }
     if (lower.includes('price') || lower.includes('cost') || lower.includes('fee') || lower.includes('pay') || lower.includes('enrol')) {
-      return 'Academy courses start at $199 for workshops and $999 for the 4-week bootcamp. Enterprise AI Quality & Managed Services pricing is customized to your organization. Check out our Academy & Checkout pages for details!';
+      return 'The One-day Executive Workshop is available at INR 2,499 as an introductory 50% off offer, reduced from INR 4,999. Check the Academy and Checkout pages for details.';
     }
     if (lower.includes('contact') || lower.includes('email') || lower.includes('phone') || lower.includes('reach') || lower.includes('location') || lower.includes('headquarter')) {
       return 'Vyomatrix.ai is headquartered in Malaysia, serving Southeast Asia. You can reach our team via the Contact page or email us at support@vyomatrix.ai.';

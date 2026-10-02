@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { AnimatedSection } from '../components/ui/AnimatedSection';
 import { SEO } from '../components/SEO';
 import { Button } from '../components/ui/Button';
@@ -8,6 +9,7 @@ import {
 } from 'lucide-react';
 
 export function Registration() {
+  const navigate = useNavigate();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
 
@@ -78,13 +80,30 @@ export function Registration() {
     setIsSubmitting(true);
     
     try {
-      await fetch('/api/contact', {
+      const response = await fetch('/api/contact', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...formData, type: 'Registration' })
       });
-      setIsSuccess(true);
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+
+      if (!response.ok) {
+        throw new Error('Registration could not be saved');
+      }
+      
+      if (formData.onSiteWorkshop) {
+        sessionStorage.setItem('vyomatrix_checkout_details', JSON.stringify({
+          name: formData.name,
+          email: formData.email,
+          phone: formData.phone,
+          city: formData.city,
+          organization: formData.college,
+          track: 'Business track'
+        }));
+        navigate('/checkout?program=one-day');
+      } else {
+        setIsSuccess(true);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
     } catch (err) {
       alert('Failed to submit registration. Please try again.');
     } finally {
@@ -301,7 +320,9 @@ export function Registration() {
                           className="peer w-5 h-5 text-primary border-silver/40 rounded-sm focus:ring-primary focus:ring-offset-1 cursor-pointer transition-colors"
                         />
                       </div>
-                      <span className="text-base text-ink/80 group-hover:text-ink transition-colors">On site workshop</span>
+                      <span className="text-base text-ink/80 group-hover:text-ink transition-colors">
+                        On-site workshop <span className="text-sm text-primary font-semibold">(₹2,499 · pay online)</span>
+                      </span>
                     </label>
 
                     <label className="flex items-center gap-3 cursor-pointer group">
@@ -404,7 +425,7 @@ export function Registration() {
                       Submitting Registration...
                     </>
                   ) : (
-                    <>Submit Registration <Send size={20} className="group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" /></>
+                    <>{formData.onSiteWorkshop ? 'Continue to payment · ₹2,499' : 'Submit Registration'} <Send size={20} className="group-hover:translate-x-1 group-hover:-translate-y-1 transition-transform" /></>
                   )}
                 </button>
               </div>
