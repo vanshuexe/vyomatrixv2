@@ -93,7 +93,7 @@ export function Admin() {
               type="password" 
               value={password}
               onChange={e => setPassword(e.target.value)}
-              placeholder="Password (admin123)"
+              placeholder="Enter admin password"
               className="w-full px-4 py-3 bg-silver-light/30 border border-silver/30 rounded-sm focus:outline-none focus:border-primary shadow-inner text-center"
             />
             {error && <p className="text-red-500 text-sm font-medium">{error}</p>}

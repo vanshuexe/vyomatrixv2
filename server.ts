@@ -58,7 +58,7 @@ const authenticateUser = (req: any, res: any, next: any) => {
 // CMS Authentication
 app.post('/api/admin/login', (req, res) => {
   const { password } = req.body;
-  if (password === 'admin123') { // Simple password for demo
+  if (password === process.env.ADMIN_PASSWORD) {
     const token = jwt.sign({ role: 'admin' }, JWT_SECRET, { expiresIn: '12h' });
     res.json({ token });
   } else {
