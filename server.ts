@@ -216,13 +216,9 @@ const razorpay = process.env.RAZORPAY_KEY_ID && process.env.RAZORPAY_KEY_SECRET
 app.post('/api/payment/create-order', async (req, res) => {
   const { amount, programId, studentDetails } = req.body;
   
-  // If razorpay is not configured, we'll just mock it for the frontend
+  // Never create a fake order: a successful enrollment must come from Razorpay.
   if (!razorpay) {
-    return res.json({
-      orderId: 'mock_order_' + Math.random().toString(36).substr(2, 9).toUpperCase(),
-      amount: amount * 100, // in paise
-      currency: 'INR'
-    });
+    return res.status(503).json({ error: 'Razorpay is not configured on the server.' });
   }
 
   try {
@@ -244,15 +240,12 @@ app.post('/api/payment/create-order', async (req, res) => {
 });
 
 app.post('/api/payment/verify', async (req, res) => {
-  const { razorpay_order_id, razorpay_payment_id, razorpay_signature, details, simulated } = req.body;
+  const { razorpay_order_id, razorpay_payment_id, razorpay_signature, details } = req.body;
 
   // Verification Logic
   let isVerified = false;
 
-  if (simulated) {
-    // Fallback simulation mode
-    isVerified = true;
-  } else if (process.env.RAZORPAY_KEY_SECRET && razorpay_order_id && razorpay_payment_id && razorpay_signature) {
+  if (process.env.RAZORPAY_KEY_SECRET && razorpay_order_id && razorpay_payment_id && razorpay_signature) {
     const body = razorpay_order_id + "|" + razorpay_payment_id;
     const expectedSignature = crypto
       .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
@@ -269,14 +262,14 @@ app.post('/api/payment/verify', async (req, res) => {
     db.enquiries.push({
       type: 'Academy Enrolment',
       details: details,
-      paymentId: razorpay_payment_id || 'simulated',
-      orderId: razorpay_order_id || 'simulated',
-      adminStatus: razorpay_payment_id && razorpay_payment_id !== 'simulated' ? 'Payment Verified' : 'Simulated / Test',
+      paymentId: razorpay_payment_id,
+      orderId: razorpay_order_id,
+      adminStatus: 'Payment Verified',
       id: 'ENQ-' + Date.now(),
       date: new Date().toISOString()
     });
     await writeDB(db);
-    res.json({ success: true, message: 'Payment confirmed and receipt emailed.' });
+    res.json({ success: true, message: 'Payment verified by Razorpay.', paymentId: razorpay_payment_id, orderId: razorpay_order_id });
   } else {
     res.status(400).json({ success: false, message: 'Invalid payment signature' });
   }

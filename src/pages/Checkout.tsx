@@ -49,6 +49,7 @@ export function Checkout() {
   
   const [step, setStep] = useState<'auth' | 'details' | 'payment' | 'success'>('auth');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [paymentReference, setPaymentReference] = useState('');
   
   const [user, setUser] = useState<any>(null);
   const [authMode, setAuthMode] = useState<'login'|'signup'>('signup');
@@ -136,19 +137,6 @@ export function Checkout() {
         price: program.price,
       };
 
-      if (formData.gateway !== 'razorpay') {
-        // Mock flow for Stripe / Billplz
-        await new Promise(r => setTimeout(r, 2000));
-        await fetch('/api/payment/verify', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ simulated: true, details: enrichedDetails })
-        });
-        alert('Purchase Completed Successfully!');
-        setStep('success');
-        return;
-      }
-
       // 1. Create order on backend
       const orderRes = await fetch('/api/payment/create-order', {
         method: 'POST',
@@ -156,18 +144,8 @@ export function Checkout() {
         body: JSON.stringify({ amount, programId: program.id, studentDetails: formData })
       });
       const orderData = await orderRes.json();
-
-      // If backend falls back to simulated order (because keys aren't set)
-      if (orderData.orderId.startsWith('mock_order_')) {
-        await new Promise(r => setTimeout(r, 1500));
-        await fetch('/api/payment/verify', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ simulated: true, details: enrichedDetails })
-        });
-        alert('Purchase Completed Successfully!');
-        setStep('success');
-        return;
+      if (!orderRes.ok || !orderData.orderId) {
+        throw new Error(orderData.error || 'Razorpay could not create a payment order.');
       }
 
       // 2. Load razorpay script
@@ -200,11 +178,11 @@ export function Checkout() {
               })
             });
             const verifyData = await verifyRes.json();
-            if (verifyData.success) {
-              alert('Purchase Completed Successfully!');
+            if (verifyRes.ok && verifyData.success) {
+              setPaymentReference(verifyData.paymentId || response.razorpay_payment_id);
               setStep('success');
             } else {
-              alert('Payment verification failed.');
+              alert(verifyData.message || 'Payment verification failed.');
             }
           } catch (e) {
             console.error(e);
@@ -266,8 +244,9 @@ export function Checkout() {
                  <div>
                    <h4 className="font-bold text-ink mb-1">1. Check your inbox</h4>
                    <p className="text-sm text-ink/70">
-                     We've sent an official tax receipt and welcome packet to <strong>{formData.email || 'your email'}</strong>.
+                     Razorpay has processed your payment. Your payment receipt will be sent to <strong>{formData.email || 'your email'}</strong> by the gateway.
                    </p>
+                   {paymentReference && <p className="text-xs text-ink/60 mt-2">Payment ID: <strong>{paymentReference}</strong></p>}
                  </div>
                </div>
 
@@ -453,40 +432,18 @@ export function Checkout() {
                   <h2 className="text-3xl font-bold text-ink mb-2 font-heading flex items-center gap-3">
                     Secure Checkout
                   </h2>
-                  <p className="text-ink/60 mb-8 pb-6 border-b border-silver/10 text-sm">Review your order summary on the right, select your preferred gateway, and proceed to complete your enrolment securely.</p>
+                  <p className="text-ink/60 mb-8 pb-6 border-b border-silver/10 text-sm">Review your order summary, then continue securely with Razorpay using cards, UPI, net banking, or wallets.</p>
                   
                   <div className="mb-8 border border-silver/20 rounded-sm p-6 bg-silver-light/20">
-                    <h3 className="text-sm font-bold text-ink mb-4 flex items-center gap-2"><Globe size={16} className="text-primary"/> Select Payment Gateway</h3>
-                    <div className="grid md:grid-cols-3 gap-4">
-                      <label className={`flex flex-col p-4 border rounded-sm cursor-pointer transition-all ${formData.gateway === 'razorpay' ? 'border-primary bg-primary/5 shadow-sm text-primary' : 'border-silver/30 hover:border-primary/50 text-ink/80 bg-white'}`}>
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="font-bold">Razorpay</span>
-                          <input type="radio" name="gateway" value="razorpay" checked={formData.gateway === 'razorpay'} onChange={e => setFormData({...formData, gateway: e.target.value})} className="w-4 h-4 text-primary" />
-                        </div>
-                        <span className="text-xs opacity-70">Best for India (INR, UPI)</span>
-                      </label>
-                      <label className={`flex flex-col p-4 border rounded-sm cursor-pointer transition-all ${formData.gateway === 'stripe' ? 'border-primary bg-primary/5 shadow-sm text-primary' : 'border-silver/30 hover:border-primary/50 text-ink/80 bg-white'}`}>
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="font-bold">Stripe</span>
-                          <input type="radio" name="gateway" value="stripe" checked={formData.gateway === 'stripe'} onChange={e => setFormData({...formData, gateway: e.target.value})} className="w-4 h-4 text-primary" />
-                        </div>
-                        <span className="text-xs opacity-70">Best for International</span>
-                      </label>
-                      <label className={`flex flex-col p-4 border rounded-sm cursor-pointer transition-all ${formData.gateway === 'billplz' ? 'border-primary bg-primary/5 shadow-sm text-primary' : 'border-silver/30 hover:border-primary/50 text-ink/80 bg-white'}`}>
-                        <div className="flex items-center justify-between mb-2">
-                          <span className="font-bold">Billplz</span>
-                          <input type="radio" name="gateway" value="billplz" checked={formData.gateway === 'billplz'} onChange={e => setFormData({...formData, gateway: e.target.value})} className="w-4 h-4 text-primary" />
-                        </div>
-                        <span className="text-xs opacity-70">Best for Malaysia (MYR)</span>
-                      </label>
-                    </div>
+                    <h3 className="text-sm font-bold text-ink mb-2 flex items-center gap-2"><Globe size={16} className="text-primary"/> Razorpay Secure Payment</h3>
+                    <p className="text-sm text-ink/70">Cards, UPI, net banking, and wallets are available in the Razorpay payment window.</p>
                   </div>
 
                   <div className="bg-silver-light/20 border border-silver/20 rounded-sm p-10 mb-8 text-center shadow-inner">
                     <Lock className="mx-auto text-primary mb-4" size={48} strokeWidth={1.5} />
-                    <h3 className="font-bold text-ink mb-3 text-xl">Payment Gateway Gateway</h3>
+                    <h3 className="font-bold text-ink mb-3 text-xl">Pay securely with Razorpay</h3>
                     <p className="text-sm text-ink/70 max-w-sm mx-auto mb-8 leading-relaxed">
-                      You will be redirected to our secure PCI-compliant gateway ({formData.gateway}) to complete the transaction. We do not store your card details.
+                      Razorpay will open its secure payment window to complete your INR transaction. We do not store your card details.
                     </p>
                     <button 
                       onClick={handlePayment}
