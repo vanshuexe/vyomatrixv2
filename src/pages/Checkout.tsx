@@ -147,18 +147,19 @@ export function Checkout() {
       if (!orderRes.ok || !orderData.orderId) {
         throw new Error(orderData.error || 'Razorpay could not create a payment order.');
       }
+      if (!orderData.keyId && !import.meta.env.VITE_RAZORPAY_KEY_ID) {
+        throw new Error('Razorpay public key is missing. Please contact support.');
+      }
 
       // 2. Load razorpay script
       const res = await loadRazorpayScript();
-      if (!res) {
-        alert('Razorpay SDK failed to load. Are you online?');
-        setIsProcessing(false);
-        return;
+      if (!res || !window.Razorpay) {
+        throw new Error('Razorpay could not load. Please check your internet connection and try again.');
       }
 
       // 3. Initialize Razorpay Checkout
       const options = {
-        key: import.meta.env.VITE_RAZORPAY_KEY_ID || '', // Will be injected when building
+        key: orderData.keyId || import.meta.env.VITE_RAZORPAY_KEY_ID || '',
         amount: orderData.amount,
         currency: orderData.currency,
         name: 'Vyomatrix Academy',
@@ -210,7 +211,7 @@ export function Checkout() {
       paymentObject.open();
     } catch (e) {
       console.error(e);
-      alert('An error occurred during checkout setup.');
+      alert(e instanceof Error ? e.message : 'An error occurred during checkout setup.');
     } finally {
       setIsProcessing(false);
     }

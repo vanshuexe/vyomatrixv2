@@ -231,7 +231,8 @@ app.post('/api/payment/create-order', async (req, res) => {
     res.json({
       orderId: order.id,
       amount: order.amount,
-      currency: order.currency
+      currency: order.currency,
+      keyId: process.env.RAZORPAY_KEY_ID
     });
   } catch (error) {
     console.error("Razorpay Error:", error);
