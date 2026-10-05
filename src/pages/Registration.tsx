@@ -95,6 +95,7 @@ export function Registration() {
           name: formData.name,
           email: formData.email,
           phone: formData.phone,
+          address: [formData.city, formData.state, formData.country].filter(Boolean).join(', '),
           city: formData.city,
           organization: formData.college,
           track: 'Business track'

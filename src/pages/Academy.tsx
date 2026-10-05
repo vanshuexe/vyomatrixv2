@@ -50,17 +50,17 @@ export function Academy() {
     }
   ];
 
-  const [academyPrograms, setAcademyPrograms] = useState<any[]>(defaultPrograms);
+  // null until the CMS answers, so visitors never see stale built-in prices flash before the admin's prices.
+  const [academyPrograms, setAcademyPrograms] = useState<any[] | null>(null);
 
   useEffect(() => {
     fetch('/api/cms/data')
       .then(res => res.json())
-      .then(data => {
-        if (data && data.courses && data.courses.length > 0) {
-          setAcademyPrograms(data.courses);
-        }
-      })
-      .catch(console.error);
+      .then(data => setAcademyPrograms(data?.courses?.length > 0 ? data.courses : defaultPrograms))
+      .catch(err => {
+        console.error(err);
+        setAcademyPrograms(defaultPrograms);
+      });
   }, []);
 
   return (
@@ -134,7 +134,10 @@ export function Academy() {
           </AnimatedSection>
 
           <div className="grid md:grid-cols-2 gap-8">
-            {academyPrograms.map((program, idx) => (
+            {!academyPrograms && (
+              <div className="md:col-span-2 py-16 text-center text-ink/50 font-medium animate-pulse">Loading programs...</div>
+            )}
+            {(academyPrograms || []).map((program, idx) => (
               <AnimatedSection key={idx} delay={idx * 0.1}>
                 <div className="flex flex-col h-full bg-white border border-silver/30 rounded-sm hover:border-primary/50 transition-colors shadow-sm hover:shadow-lg overflow-hidden group">
                   <div className="p-8 flex-1">
@@ -188,9 +191,15 @@ export function Academy() {
                       )}
                     </div>
                     {/* Route to actual checkout integration */}
-                    <Button to={`/checkout?program=${program.id}`} variant="primary" className="shadow-md shadow-primary/20 w-full sm:w-auto px-8 py-3">
-                      Enrol Now
-                    </Button>
+                    {program.sessionsClosed ? (
+                      <span className="w-full sm:w-auto px-8 py-3 text-center text-sm font-bold text-ink/50 border border-silver/30 rounded-sm">
+                        New dates coming soon
+                      </span>
+                    ) : (
+                      <Button to={`/checkout?program=${program.id}`} variant="primary" className="shadow-md shadow-primary/20 w-full sm:w-auto px-8 py-3">
+                        Enrol Now
+                      </Button>
+                    )}
                   </div>
                 </div>
               </AnimatedSection>

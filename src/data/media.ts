@@ -8,6 +8,7 @@ export interface Publication {
   author: string;
   summary: string;
   content: string[];
+  thumbnailUrl?: string;
   status: 'Published' | 'Draft';
 }
 

@@ -92,15 +92,19 @@ export function Contact() {
     setIsSubmitting(true);
     
     try {
-      await fetch('/api/contact', {
+      const response = await fetch('/api/contact', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData)
       });
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data.error || 'Failed to send inquiry.');
+      }
       setIsSuccess(true);
       window.scrollTo({ top: 0, behavior: 'smooth' });
     } catch (err) {
-      alert('Failed to send inquiry. Please try again or email us directly.');
+      alert(`${err instanceof Error ? err.message : 'Failed to send inquiry.'} Please try again or email us directly.`);
     } finally {
       setIsSubmitting(false);
     }

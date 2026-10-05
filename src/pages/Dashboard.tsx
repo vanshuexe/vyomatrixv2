@@ -1,13 +1,17 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AnimatedSection } from '../components/ui/AnimatedSection';
-import { BookOpen, Clock, CheckCircle2, AlertCircle, LogOut, ExternalLink, IndianRupee } from 'lucide-react';
+import { BookOpen, Clock, CheckCircle2, AlertCircle, LogOut, ExternalLink, IndianRupee, FileText, Download, CreditCard, Loader2 } from 'lucide-react';
 import { SEO } from '../components/SEO';
+import { loadRazorpayScript } from '../lib/razorpay';
 
 export function Dashboard() {
-  const [data, setData] = useState<{ email: string; orders: any[] } | null>(null);
+  const [data, setData] = useState<{ email: string; orders: any[]; invoices: any[] } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [payingId, setPayingId] = useState<string | null>(null);
+  const [payNotice, setPayNotice] = useState<{ invoiceId: string; tone: 'success' | 'error'; text: string } | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -43,13 +47,96 @@ export function Dashboard() {
     };
 
     fetchDashboard();
-  }, [navigate]);
+  }, [navigate, refreshKey]);
 
   const handleLogout = () => {
     localStorage.removeItem('user_token');
     localStorage.removeItem('user_email');
     window.dispatchEvent(new Event('auth_change'));
     navigate('/');
+  };
+
+  const handleInvoiceDownload = async (invoice: any) => {
+    const token = localStorage.getItem('user_token');
+    if (!token) return navigate('/login');
+    const response = await fetch(`/api/invoices/${invoice.id}/pdf`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (!response.ok) {
+      alert('Unable to download invoice. Please try again.');
+      return;
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${invoice.invoiceNumber || invoice.id}.pdf`;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const handlePay = async (invoice: any) => {
+    const token = localStorage.getItem('user_token');
+    if (!token) return navigate('/login');
+    const notify = (tone: 'success' | 'error', text: string) => setPayNotice({ invoiceId: invoice.id, tone, text });
+    setPayingId(invoice.id);
+    setPayNotice(null);
+    try {
+      const res = await fetch(`/api/invoices/${invoice.id}/pay`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const order = await res.json().catch(() => ({}));
+      if (!res.ok) return notify('error', order.error || 'Could not start the payment. Please try again.');
+      if (order.alreadyPaid) {
+        notify('success', 'Payment for this invoice was already received. It is now marked Paid.');
+        return setRefreshKey(key => key + 1);
+      }
+      if (!(await loadRazorpayScript())) {
+        return notify('error', 'Razorpay could not load. Please check your internet connection and try again.');
+      }
+
+      const checkout = new window.Razorpay({
+        key: order.keyId,
+        amount: order.amount,
+        currency: order.currency,
+        name: 'Vyomatrix Academy',
+        description: `Invoice ${order.invoiceNumber}: ${order.programTitle || 'Academy enrolment'}`,
+        order_id: order.orderId,
+        prefill: order.prefill,
+        theme: { color: '#5B4AF0' },
+        handler: async (response: any) => {
+          try {
+            const verifyRes = await fetch('/api/payment/verify', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_signature: response.razorpay_signature
+              })
+            });
+            const verifyData = await verifyRes.json();
+            if (verifyRes.ok && verifyData.success) {
+              notify('success', `Payment received. Invoice ${verifyData.invoiceNumber || order.invoiceNumber} is now Paid.`);
+              setRefreshKey(key => key + 1);
+            } else {
+              notify('error', verifyData.message || 'Payment verification failed. Your invoice remains unpaid.');
+            }
+          } catch {
+            notify('error', 'We could not verify the payment yet. Please refresh in a moment or contact support.');
+          }
+        }
+      });
+      checkout.on('payment.failed', (response: any) => {
+        notify('error', response?.error?.description || 'Payment did not complete. You can try again.');
+      });
+      checkout.open();
+    } catch {
+      notify('error', 'Connection error. Please try again.');
+    } finally {
+      setPayingId(null);
+    }
   };
 
   if (loading) {
@@ -104,6 +191,70 @@ export function Dashboard() {
       </div>
 
       <div className="max-w-5xl mx-auto px-6 mt-8">
+        <AnimatedSection className="mb-10">
+          <div className="mb-6">
+            <h2 className="text-xl font-bold font-heading text-ink flex items-center gap-2">
+              <FileText className="text-primary" /> My Invoices
+            </h2>
+            <p className="text-sm text-ink/60 mt-1">Invoices are created when checkout starts and marked paid after Razorpay confirms payment. You can pay any unpaid invoice here.</p>
+          </div>
+
+          {(data?.invoices || []).length === 0 ? (
+            <div className="bg-white border border-silver/30 rounded-sm p-6 text-sm text-silver shadow-sm">
+              No invoices yet.
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {data?.invoices.map((invoice: any) => {
+                const isPaid = invoice.status === 'Paid';
+                return (
+                  <div key={invoice.id} className="bg-white border border-silver/20 rounded-sm shadow-sm p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                      <div className="flex items-center gap-3 mb-1">
+                        <span className="font-mono font-bold text-primary">{invoice.invoiceNumber || invoice.id}</span>
+                        <span className={`px-2.5 py-1 rounded-full border text-xs font-bold ${isPaid ? 'bg-green-100 text-green-800 border-green-200' : 'bg-yellow-100 text-yellow-800 border-yellow-200'}`}>
+                          {isPaid ? 'Paid' : 'Unpaid'}
+                        </span>
+                      </div>
+                      <div className="font-bold text-ink">{invoice.programTitle || 'Academy enrolment'}</div>
+                      {invoice.customer?.session && <div className="text-sm text-ink/70 mt-0.5">Session: {invoice.customer.session}</div>}
+                      <div className="text-xs text-silver mt-1">Order: {invoice.orderId || '—'}</div>
+                    </div>
+                      <div className="text-left md:text-right">
+                      <div className="text-lg font-bold text-ink">₹{Number(invoice.amountINR || 0).toLocaleString('en-IN')}</div>
+                      <div className="text-xs text-silver">{invoice.createdAt ? new Date(invoice.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}</div>
+                      {isPaid && invoice.paymentId && <div className="text-xs text-green-700 mt-1">Payment ID: {invoice.paymentId}</div>}
+                      <div className="mt-3 flex flex-col items-start md:items-end gap-2">
+                        {!isPaid && invoice.sessionEnded && (
+                          <span className="text-xs font-bold text-ink/50">Session ended · enrol in an upcoming session</span>
+                        )}
+                        {!isPaid && !invoice.sessionEnded && (
+                          <button
+                            onClick={() => handlePay(invoice)}
+                            disabled={payingId !== null}
+                            className="inline-flex items-center gap-2 px-4 py-2 bg-primary text-white text-sm font-bold rounded-sm hover:bg-primary-dark transition-colors shadow-sm disabled:opacity-60"
+                          >
+                            {payingId === invoice.id ? <Loader2 size={14} className="animate-spin" /> : <CreditCard size={14} />}
+                            {payingId === invoice.id ? 'Opening Razorpay...' : 'Pay now'}
+                          </button>
+                        )}
+                        <button onClick={() => handleInvoiceDownload(invoice)} className="inline-flex items-center gap-2 text-xs font-bold text-primary hover:text-primary-dark">
+                          <Download size={14} /> Download PDF
+                        </button>
+                      </div>
+                      {payNotice?.invoiceId === invoice.id && (
+                        <p role={payNotice.tone === 'error' ? 'alert' : 'status'} className={`mt-2 text-xs font-medium max-w-xs md:ml-auto ${payNotice.tone === 'error' ? 'text-red-600' : 'text-green-700'}`}>
+                          {payNotice.text}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </AnimatedSection>
+
         <AnimatedSection>
           <div className="mb-6">
             <h2 className="text-xl font-bold font-heading text-ink flex items-center gap-2">
@@ -157,6 +308,7 @@ export function Dashboard() {
                                 {d.track} Track
                               </span>
                             )}
+                            {d.session && <div className="mt-2 text-sm text-ink/70">Session: <span className="font-medium text-ink">{d.session}</span></div>}
                           </div>
                           <div className={`px-3 py-1.5 border rounded-full text-xs font-bold flex items-center gap-1.5 whitespace-nowrap ${statusCfg.classes}`}>
                             <StatusIcon size={14} /> {statusCfg.label}

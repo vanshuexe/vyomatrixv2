@@ -15,7 +15,6 @@ import { Admin } from './pages/Admin';
 import { Login } from './pages/Login';
 import { Dashboard } from './pages/Dashboard';
 import { Services } from './pages/Services';
-import { Registration } from './pages/Registration';
 import { CMSProvider } from './components/CMSContext';
 import { useEffect } from 'react';
 import AOS from 'aos';
@@ -40,7 +39,7 @@ export default function App() {
             <Route index element={<Home />} />
             <Route path="services" element={<Services />} />
             <Route path="academy" element={<Academy />} />
-            <Route path="register" element={<Registration />} />
+            <Route path="register" element={<Checkout />} />
             <Route path="academy/checkout/:id" element={<Checkout />} />
             <Route path="checkout" element={<Checkout />} />
             <Route path="media" element={<Media />} />

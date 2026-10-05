@@ -17,7 +17,7 @@ export function ChatWidget() {
 
   const getFallbackReply = (userMsg: string) => {
     const lower = (userMsg || '').toLowerCase();
-    if (lower.includes('hi') || lower.includes('hello') || lower.includes('hey') || lower.includes('start') || lower.includes('welcome')) {
+    if (/\b(hi|hello|hey|start|welcome)\b/.test(lower)) {
       return 'Welcome to Vyomatrix.ai! How can I help you with our AI Quality, Managed Services, Platform, or Academy offerings today?';
     }
     if (lower.includes('quality') || lower.includes('audit') || lower.includes('assurance') || lower.includes('hallucination') || lower.includes('bias')) {
@@ -30,10 +30,10 @@ export function ChatWidget() {
       return 'The Vyomatrix Platform is a unified suite for AI quality, governance, and accountability with configurable risk evaluation modules and immutable audit trails.';
     }
     if (lower.includes('academy') || lower.includes('course') || lower.includes('bootcamp') || lower.includes('train') || lower.includes('learn') || lower.includes('workshop')) {
-      return 'Vyomatrix Academy offers practical training in AI evaluation & safety. The One-day Executive Workshop is currently available at INR 2,499 as an introductory 50% off offer (regularly INR 4,999).';
+      return 'Vyomatrix Academy offers practical training in AI evaluation & safety. See the Academy page for current programs and pricing.';
     }
     if (lower.includes('price') || lower.includes('cost') || lower.includes('fee') || lower.includes('pay') || lower.includes('enrol')) {
-      return 'The One-day Executive Workshop is available at INR 2,499 as an introductory 50% off offer, reduced from INR 4,999. Check the Academy and Checkout pages for details.';
+      return 'Current pricing for every Academy program is listed on the Academy page, and on the Checkout page when you enrol.';
     }
     if (lower.includes('contact') || lower.includes('email') || lower.includes('phone') || lower.includes('reach') || lower.includes('location') || lower.includes('headquarter')) {
       return 'Vyomatrix.ai is headquartered in Malaysia, serving Southeast Asia. You can reach our team via the Contact page or email us at support@vyomatrix.ai.';

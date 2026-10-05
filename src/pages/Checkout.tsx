@@ -4,13 +4,7 @@ import { AnimatedSection } from '../components/ui/AnimatedSection';
 import { SEO } from '../components/SEO';
 import { ShieldCheck, CheckCircle2, ArrowLeft, Loader2, CreditCard, Lock, Mail, User, Phone, MapPin, GraduationCap, Banknote, Calendar, Building, Tag, Globe } from 'lucide-react';
 import { Button } from '../components/ui/Button';
-
-// Razorpay type definition for TypeScript
-declare global {
-  interface Window {
-    Razorpay: any;
-  }
-}
+import { loadRazorpayScript } from '../lib/razorpay';
 
 export function Checkout() {
   const { id } = useParams();
@@ -46,10 +40,22 @@ export function Checkout() {
 
   // Fallback to first program if not found, just so we don't white screen
   const program = academyPrograms.find(p => p.id === programId) || (academyPrograms.length > 0 ? academyPrograms[0] : null);
+  // Sessions (venue + dates) are set per course in the admin panel; the value matches the server's format.
+  const sessionOptions = (Array.isArray(program?.sessions) ? program.sessions : [])
+    .map((session: any) => {
+      const name = String(session?.name || '').trim();
+      const dates = String(session?.dates || '').trim();
+      return { name, dates, value: [name, dates].filter(Boolean).join(' · ') };
+    })
+    .filter((session: { value: string }) => session.value);
   
   const [step, setStep] = useState<'auth' | 'details' | 'payment' | 'success'>('auth');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [checkoutError, setCheckoutError] = useState('');
+  const [pendingOrder, setPendingOrder] = useState<any>(null);
   const [paymentReference, setPaymentReference] = useState('');
+  const [invoiceNumber, setInvoiceNumber] = useState('');
+  const [invoiceState, setInvoiceState] = useState<{ id: string; number: string; status: 'Unpaid' | 'Paid'; orderId: string } | null>(null);
   
   const [user, setUser] = useState<any>(null);
   const [authMode, setAuthMode] = useState<'login'|'signup'>('signup');
@@ -59,7 +65,7 @@ export function Checkout() {
   const [isAuthLoading, setIsAuthLoading] = useState(false);
 
   const [formData, setFormData] = useState({
-    name: '', email: '', phone: '', city: '', track: 'Business track', organization: '', coupon: '', gateway: 'razorpay'
+    name: '', education: '', college: '', email: '', phone: '', address: '', city: '', state: '', country: '', role: 'Student', referredBy: '', onSiteWorkshop: true, demo: false, bootcamp: false, track: 'Business track', session: '', organization: '', coupon: '', gateway: 'razorpay'
   });
 
   useEffect(() => {
@@ -74,16 +80,6 @@ export function Checkout() {
     }
   }, []);
 
-  const loadRazorpayScript = () => {
-    return new Promise((resolve) => {
-      const script = document.createElement('script');
-      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
-      script.onload = () => resolve(true);
-      script.onerror = () => resolve(false);
-      document.body.appendChild(script);
-    });
-  };
-
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsAuthLoading(true);
@@ -93,7 +89,7 @@ export function Checkout() {
       const res = await fetch('/api/user/auth', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: authEmail, password: authPassword })
+        body: JSON.stringify({ email: authEmail, password: authPassword, mode: authMode })
       });
       const data = await res.json();
       
@@ -117,35 +113,45 @@ export function Checkout() {
 
   const handleDetailsSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    setStep('payment');
+    setCheckoutError('');
+    void handlePayment();
   };
 
   const handlePayment = async () => {
     setIsProcessing(true);
+    setCheckoutError('');
     
     try {
-      // Clean numeric amount from the price string (e.g. "INR 45,000" -> 45000)
-      const numericPrice = program.price.replace(/[^0-9]/g, '');
-      const amount = parseInt(numericPrice, 10);
-
       // Enrich formData with course context
       const enrichedDetails = {
         ...formData,
         programId: program.id,
         programTitle: program.title,
-        amountINR: amount,
         price: program.price,
       };
 
-      // 1. Create order on backend
-      const orderRes = await fetch('/api/payment/create-order', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ amount, programId: program.id, studentDetails: formData })
-      });
-      const orderData = await orderRes.json();
-      if (!orderRes.ok || !orderData.orderId) {
-        throw new Error(orderData.error || 'Razorpay could not create a payment order.');
+      let orderData = pendingOrder;
+      if (!orderData) {
+        const token = localStorage.getItem('user_token');
+        if (!token) throw new Error('Please sign in again before continuing to payment.');
+        const orderRes = await fetch('/api/payment/create-order', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ programId: program.id, studentDetails: formData })
+        });
+        orderData = await orderRes.json();
+        if (!orderRes.ok || !orderData.orderId) {
+          throw new Error(orderData.error || 'Razorpay could not create a payment order.');
+        }
+        setPendingOrder(orderData);
+        setInvoiceNumber(orderData.invoiceNumber || '');
+        setInvoiceState({
+          id: orderData.invoiceId,
+          number: orderData.invoiceNumber,
+          status: 'Unpaid',
+          orderId: orderData.orderId
+        });
+        setStep('payment');
       }
       if (!orderData.keyId && !import.meta.env.VITE_RAZORPAY_KEY_ID) {
         throw new Error('Razorpay public key is missing. Please contact support.');
@@ -174,20 +180,20 @@ export function Checkout() {
               body: JSON.stringify({
                 razorpay_payment_id: response.razorpay_payment_id,
                 razorpay_order_id: response.razorpay_order_id,
-                razorpay_signature: response.razorpay_signature,
-                details: enrichedDetails
+                razorpay_signature: response.razorpay_signature
               })
             });
             const verifyData = await verifyRes.json();
             if (verifyRes.ok && verifyData.success) {
               setPaymentReference(verifyData.paymentId || response.razorpay_payment_id);
+              setInvoiceState(prev => prev ? { ...prev, status: 'Paid' } : prev);
               setStep('success');
             } else {
-              alert(verifyData.message || 'Payment verification failed.');
+              setCheckoutError(verifyData.message || 'Payment verification failed. Your invoice remains unpaid.');
             }
           } catch (e) {
             console.error(e);
-            alert('Error verifying payment.');
+            setCheckoutError('We could not verify the payment yet. Your invoice remains unpaid; please retry or contact support.');
           }
         },
         prefill: {
@@ -206,12 +212,15 @@ export function Checkout() {
 
       const paymentObject = new window.Razorpay(options);
       paymentObject.on('payment.failed', function (response: any) {
-        alert(response.error.description);
+        setCheckoutError(response?.error?.description || 'Payment did not complete. You can retry using this invoice.');
+      });
+      paymentObject.on('payment.dismissed', () => {
+        setCheckoutError('Checkout was closed. Your invoice is still unpaid; you can retry below.');
       });
       paymentObject.open();
     } catch (e) {
       console.error(e);
-      alert(e instanceof Error ? e.message : 'An error occurred during checkout setup.');
+      setCheckoutError(e instanceof Error ? e.message : 'An error occurred during checkout setup.');
     } finally {
       setIsProcessing(false);
     }
@@ -248,6 +257,7 @@ export function Checkout() {
                      Razorpay has processed your payment. Your payment receipt will be sent to <strong>{formData.email || 'your email'}</strong> by the gateway.
                    </p>
                    {paymentReference && <p className="text-xs text-ink/60 mt-2">Payment ID: <strong>{paymentReference}</strong></p>}
+                   {invoiceNumber && <p className="text-xs text-ink/60 mt-1">Invoice: <strong>{invoiceNumber}</strong> · Paid</p>}
                  </div>
                </div>
 
@@ -369,7 +379,7 @@ export function Checkout() {
                   <h2 className="text-3xl font-bold text-ink mb-2 font-heading">Enrolment Details</h2>
                   <p className="text-ink/60 mb-8 pb-6 border-b border-silver/10 text-sm">Please fill out your details. This information will be used for your official tax invoice and academy certificate.</p>
                   
-                  <form onSubmit={handleDetailsSubmit} className="space-y-6">
+                  <form onSubmit={handleDetailsSubmit} onInvalidCapture={() => setCheckoutError('Please complete the required fields above before continuing to Razorpay.')} className="space-y-6">
                     <div className="grid md:grid-cols-2 gap-6">
                       <div>
                         <label className="block text-sm font-bold text-ink mb-2 flex items-center gap-2"><User size={16} className="text-primary" /> Full name *</label>
@@ -378,6 +388,29 @@ export function Checkout() {
                       <div>
                         <label className="block text-sm font-bold text-ink mb-2 flex items-center gap-2"><Mail size={16} className="text-primary" /> Email address *</label>
                         <input required type="email" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} className="w-full px-4 py-3 bg-silver-light/20 border border-silver/30 rounded-sm text-base focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary focus:bg-white transition-colors shadow-inner" placeholder="john@example.com" />
+                      </div>
+                    </div>
+
+                    <div className="grid md:grid-cols-2 gap-6">
+                      <div>
+                        <label className="block text-sm font-bold text-ink mb-2 flex items-center gap-2"><GraduationCap size={16} className="text-primary" /> Education</label>
+                        <input type="text" value={formData.education} onChange={e => setFormData({...formData, education: e.target.value})} className="w-full px-4 py-3 bg-silver-light/20 border border-silver/30 rounded-sm text-base focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary focus:bg-white transition-colors shadow-inner" placeholder="B.Tech, M.Sc, etc." />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-bold text-ink mb-2 flex items-center gap-2"><Building size={16} className="text-primary" /> College / Organization *</label>
+                        <input required type="text" value={formData.college} onChange={e => setFormData({...formData, college: e.target.value, organization: e.target.value})} className="w-full px-4 py-3 bg-silver-light/20 border border-silver/30 rounded-sm text-base focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary focus:bg-white transition-colors shadow-inner" placeholder="College or organization" />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-bold text-ink mb-2">Current status *</label>
+                      <div className="grid grid-cols-2 gap-4">
+                        {['Student', 'Employee'].map(option => (
+                          <label key={option} className={`flex items-center justify-center gap-2 p-3 border rounded-sm cursor-pointer ${formData.role === option ? 'border-primary bg-primary/5 text-primary font-bold' : 'border-silver/30 text-ink/80'}`}>
+                            <input type="radio" name="role" value={option} checked={formData.role === option} onChange={e => setFormData({...formData, role: e.target.value})} />
+                            {option}
+                          </label>
+                        ))}
                       </div>
                     </div>
                     
@@ -392,9 +425,37 @@ export function Checkout() {
                       </div>
                     </div>
 
+                    <div className="grid md:grid-cols-2 gap-6">
+                      <div>
+                        <label className="block text-sm font-bold text-ink mb-2">State</label>
+                        <input type="text" value={formData.state} onChange={e => setFormData({...formData, state: e.target.value})} className="w-full px-4 py-3 bg-silver-light/20 border border-silver/30 rounded-sm text-base focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary focus:bg-white transition-colors shadow-inner" placeholder="State" />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-bold text-ink mb-2">Country</label>
+                        <input type="text" value={formData.country} onChange={e => setFormData({...formData, country: e.target.value})} className="w-full px-4 py-3 bg-silver-light/20 border border-silver/30 rounded-sm text-base focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary focus:bg-white transition-colors shadow-inner" placeholder="Country" />
+                      </div>
+                    </div>
+
                     <div>
-                      <label className="block text-sm font-bold text-ink mb-2 flex items-center gap-2"><Building size={16} className="text-primary" /> College or Employer (Optional)</label>
-                      <input type="text" value={formData.organization} onChange={e => setFormData({...formData, organization: e.target.value})} className="w-full px-4 py-3 bg-silver-light/20 border border-silver/30 rounded-sm text-base focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary focus:bg-white transition-colors shadow-inner" placeholder="Organization name" />
+                      <label className="block text-sm font-bold text-ink mb-2 flex items-center gap-2"><MapPin size={16} className="text-primary" /> Billing address *</label>
+                      <textarea required value={formData.address} onChange={e => setFormData({...formData, address: e.target.value})} className="w-full px-4 py-3 min-h-24 bg-silver-light/20 border border-silver/30 rounded-sm text-base focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary focus:bg-white transition-colors shadow-inner resize-y" placeholder="Street address, area, landmark" />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-bold text-ink mb-2">Referred by</label>
+                      <input type="text" value={formData.referredBy} onChange={e => setFormData({...formData, referredBy: e.target.value})} className="w-full px-4 py-3 bg-silver-light/20 border border-silver/30 rounded-sm text-base focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary focus:bg-white transition-colors shadow-inner" placeholder="Name or source" />
+                    </div>
+
+                    <div className="pt-4 border-t border-silver/10">
+                      <label className="block text-sm font-bold text-ink mb-3">Interests</label>
+                      <div className="grid sm:grid-cols-3 gap-3">
+                        {[['onSiteWorkshop', 'On-site workshop'], ['demo', 'Demo'], ['bootcamp', 'Boot camp']].map(([key, label]) => (
+                          <label key={key} className="flex items-center gap-2 text-sm text-ink/80">
+                            <input type="checkbox" checked={Boolean(formData[key as keyof typeof formData])} onChange={e => setFormData({...formData, [key]: e.target.checked})} className="w-4 h-4 text-primary" />
+                            {label}
+                          </label>
+                        ))}
+                      </div>
                     </div>
 
                     <div className="pt-4 border-t border-silver/10">
@@ -416,9 +477,43 @@ export function Checkout() {
                       </div>
                     </div>
 
+                    {sessionOptions.length > 0 && (
+                      <div className="pt-4 border-t border-silver/10">
+                        <label className="block text-sm font-bold text-ink mb-3 flex items-center gap-2"><Calendar size={16} className="text-primary" /> Choose your session *</label>
+                        <div className="grid lg:grid-cols-3 gap-3">
+                          {sessionOptions.map(({ name, dates, value }, idx) => (
+                            <label key={value} className={`flex items-start gap-3 p-4 border rounded-sm cursor-pointer transition-all ${formData.session === value ? 'border-primary bg-primary/5 shadow-sm' : 'border-silver/30 hover:border-primary/50 hover:bg-silver-light/50'}`}>
+                              <input
+                                type="radio"
+                                name="session"
+                                value={value}
+                                required={idx === 0}
+                                checked={formData.session === value}
+                                onChange={e => setFormData({...formData, session: e.target.value})}
+                                className="mt-0.5 w-4 h-4 text-primary border-silver/30 focus:ring-primary"
+                              />
+                              <span>
+                                <span className={`block text-sm font-bold ${formData.session === value ? 'text-primary' : 'text-ink'}`}>{name}</span>
+                                {dates && <span className="block text-xs text-ink/60 mt-0.5">{dates}</span>}
+                              </span>
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {program.sessionsClosed && (
+                      <div className="pt-4 border-t border-silver/10">
+                        <p role="status" className="rounded-sm border border-yellow-200 bg-yellow-50 p-3 text-sm font-medium text-yellow-800">
+                          All sessions for this program have ended. New dates will be announced soon.
+                        </p>
+                      </div>
+                    )}
+
                     <div className="pt-6 mt-6 border-t border-silver/10">
-                      <button type="submit" className="w-full py-4 bg-primary text-white rounded-sm font-bold hover:bg-primary-dark transition-colors shadow-xl shadow-primary/20 flex items-center justify-center gap-2 text-lg">
-                        Continue to Payment <ArrowLeft size={18} className="rotate-180" />
+                      {checkoutError && <p role="alert" className="mb-4 rounded-sm border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700">{checkoutError}</p>}
+                      <button type="submit" disabled={Boolean(program.sessionsClosed)} className="w-full py-4 bg-primary text-white rounded-sm font-bold hover:bg-primary-dark transition-colors shadow-xl shadow-primary/20 flex items-center justify-center gap-2 text-lg disabled:opacity-50 disabled:cursor-not-allowed">
+                        Continue to Razorpay <ArrowLeft size={18} className="rotate-180" />
                       </button>
                     </div>
                   </form>
@@ -434,6 +529,25 @@ export function Checkout() {
                     Secure Checkout
                   </h2>
                   <p className="text-ink/60 mb-8 pb-6 border-b border-silver/10 text-sm">Review your order summary, then continue securely with Razorpay using cards, UPI, net banking, or wallets.</p>
+                  {checkoutError && <p role="alert" className="mb-6 rounded-sm border border-red-200 bg-red-50 p-3 text-sm font-medium text-red-700">{checkoutError}</p>}
+
+                  {invoiceState && (
+                    <div className={`mb-8 p-5 rounded-sm border ${invoiceState.status === 'Paid' ? 'bg-green-50 border-green-200' : 'bg-yellow-50 border-yellow-200'}`}>
+                      <div className="flex items-center justify-between gap-4">
+                        <div>
+                          <div className="text-xs uppercase tracking-wider font-bold text-silver mb-1">Invoice</div>
+                          <div className="font-mono font-bold text-ink">{invoiceState.number}</div>
+                          <div className="text-xs text-ink/60 mt-1">Order: {invoiceState.orderId}</div>
+                        </div>
+                        <span className={`px-3 py-1.5 rounded-full border text-xs font-bold ${invoiceState.status === 'Paid' ? 'bg-green-100 text-green-800 border-green-200' : 'bg-yellow-100 text-yellow-800 border-yellow-200'}`}>
+                          {invoiceState.status}
+                        </span>
+                      </div>
+                      {invoiceState.status === 'Unpaid' && (
+                        <p className="text-sm text-yellow-800 mt-3">This invoice will change to Paid after Razorpay confirms your payment.</p>
+                      )}
+                    </div>
+                  )}
                   
                   <div className="mb-8 border border-silver/20 rounded-sm p-6 bg-silver-light/20">
                     <h3 className="text-sm font-bold text-ink mb-2 flex items-center gap-2"><Globe size={16} className="text-primary"/> Razorpay Secure Payment</h3>
@@ -458,7 +572,7 @@ export function Checkout() {
                     </div>
                   </div>
                   <div className="text-center">
-                    <button onClick={() => setStep('details')} className="text-sm font-bold text-ink/60 hover:text-primary transition-colors flex items-center justify-center gap-2 mx-auto">
+                    <button onClick={() => { setPendingOrder(null); setInvoiceState(null); setStep('details'); }} className="text-sm font-bold text-ink/60 hover:text-primary transition-colors flex items-center justify-center gap-2 mx-auto">
                       <ArrowLeft size={16} /> Edit student details
                     </button>
                   </div>
@@ -492,6 +606,16 @@ export function Checkout() {
                       <div className="text-sm font-medium text-ink">{formData.track || 'Pending Selection'}</div>
                     </div>
                   </div>
+
+                  {sessionOptions.length > 0 && (
+                    <div className="flex items-start gap-3">
+                      <Building size={18} className="text-primary mt-0.5" />
+                      <div>
+                        <div className="text-xs text-ink/50 uppercase tracking-wider font-mono mb-1 font-bold">Session</div>
+                        <div className="text-sm font-medium text-ink">{formData.session || 'Pending Selection'}</div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 <div className="bg-silver-light/30 border border-silver/10 rounded-sm p-5 mb-6">

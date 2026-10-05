@@ -1,7 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { AnimatedSection } from '../components/ui/AnimatedSection';
-import { Lock, LogOut, FileText, Database, Settings, GraduationCap, CheckCircle2, ShieldAlert, CreditCard, User, Mail, Phone, MapPin, BookOpen, Building2, Hash, IndianRupee, Clock, Filter } from 'lucide-react';
+import { Lock, LogOut, FileText, Database, Settings, GraduationCap, CheckCircle2, ShieldAlert, CreditCard, User, Mail, Phone, MapPin, BookOpen, Building2, Hash, IndianRupee, Clock, Filter, Calendar, Plus, Trash2 } from 'lucide-react';
 import { Button } from '../components/ui/Button';
+
+// Course prices are display strings such as "INR 2,499"; read the first number in them.
+const parsePrice = (value: unknown) => {
+  const match = String(value ?? '').match(/\d[\d,]*(?:\.\d{1,2})?/);
+  return match ? Number(match[0].replace(/,/g, '')) : NaN;
+};
 
 export function Admin() {
   const [token, setToken] = useState<string | null>(localStorage.getItem('admin_token'));
@@ -9,7 +15,7 @@ export function Admin() {
   const [error, setError] = useState('');
   
   const [db, setDb] = useState<any>(null);
-  const [activeTab, setActiveTab] = useState<'pages' | 'courses' | 'media' | 'enquiries' | 'orders' | 'settings' | 'registrations'>('pages');
+  const [activeTab, setActiveTab] = useState<'pages' | 'courses' | 'media' | 'enquiries' | 'orders' | 'invoices' | 'settings' | 'registrations'>('pages');
   const [isSaving, setIsSaving] = useState(false);
   const [saveMessage, setSaveMessage] = useState('');
 
@@ -36,8 +42,17 @@ export function Admin() {
 
   const loadData = async () => {
     try {
-      const res = await fetch('/api/cms/data');
+      const res = await fetch('/api/cms/data', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
       const data = await res.json();
+      // An expired or old-secret token still gets the public CMS view (no enquiries); send the admin back to login.
+      if (!Array.isArray(data.enquiries)) {
+        setToken(null);
+        localStorage.removeItem('admin_token');
+        setError('Your admin session has expired. Please log in again.');
+        return;
+      }
       setDb(data);
     } catch (err) {
       console.error(err);
@@ -58,7 +73,8 @@ export function Admin() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
         },
-        body: JSON.stringify(db)
+        // Only the CMS-editable sections; orders, invoices and users are managed by the server.
+        body: JSON.stringify({ pages: db.pages, courses: db.courses, media: db.media, settings: db.settings })
       });
       if (res.ok) {
         setSaveMessage('Saved successfully');
@@ -76,6 +92,23 @@ export function Admin() {
   const handleLogout = () => {
     setToken(null);
     localStorage.removeItem('admin_token');
+  };
+
+  const handleInvoiceDownload = async (invoice: any) => {
+    const response = await fetch(`/api/invoices/${invoice.id}/pdf`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (!response.ok) {
+      alert('Unable to download invoice. Please try again.');
+      return;
+    }
+    const blob = await response.blob();
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${invoice.invoiceNumber || invoice.id}.pdf`;
+    link.click();
+    URL.revokeObjectURL(url);
   };
 
   if (!token) {
@@ -134,6 +167,9 @@ export function Admin() {
           </button>
           <button onClick={() => setActiveTab('orders')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-sm text-left transition-colors ${activeTab === 'orders' ? 'bg-primary text-white' : 'text-silver hover:bg-ink-light'}`}>
             <CheckCircle2 size={18} /> Orders ({db.enquiries?.filter((e: any) => e.type === 'Academy Enrolment').length || 0})
+          </button>
+          <button onClick={() => setActiveTab('invoices')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-sm text-left transition-colors ${activeTab === 'invoices' ? 'bg-primary text-white' : 'text-silver hover:bg-ink-light'}`}>
+            <FileText size={18} /> Invoices ({db.invoices?.length || 0})
           </button>
           <button onClick={() => setActiveTab('settings')} className={`w-full flex items-center gap-3 px-4 py-3 rounded-sm text-left transition-colors ${activeTab === 'settings' ? 'bg-primary text-white' : 'text-silver hover:bg-ink-light'}`}>
             <Settings size={18} /> Gateway Settings
@@ -211,35 +247,140 @@ export function Admin() {
         })()}
 
         {/* Courses Editor */}
-        {activeTab === 'courses' && (
-          <div className="space-y-6">
-            {db.courses.map((course: any, idx: number) => (
-              <div key={course.id} className="bg-white p-6 rounded-sm shadow-sm border border-silver/30">
-                <div className="flex justify-between items-start mb-4">
-                  <h3 className="text-lg font-bold font-heading">{course.title} (ID: {course.id})</h3>
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-xs font-bold text-silver mb-1">Title</label>
-                    <input type="text" value={course.title} onChange={e => { const newDb = {...db}; newDb.courses[idx].title = e.target.value; setDb(newDb); }} className="w-full p-2 border border-silver/30 rounded-sm text-sm" />
+        {activeTab === 'courses' && (() => {
+          const updateCourse = (idx: number, field: string, value: unknown) => {
+            setDb({ ...db, courses: db.courses.map((course: any, i: number) => i === idx ? { ...course, [field]: value } : course) });
+          };
+          const inputClass = 'w-full p-2 border border-silver/30 rounded-sm text-sm focus:outline-none focus:border-primary';
+          const labelClass = 'block text-xs font-bold text-silver mb-1';
+          // Same rule as the server: a session stays open through its last day, judged in India time.
+          const today = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date());
+
+          return (
+            <div className="space-y-6">
+              {db.courses.map((course: any, idx: number) => {
+                const price = parsePrice(course.price);
+                const original = parsePrice(course.originalPrice);
+                const discount = price > 0 && original > price ? Math.round((1 - price / original) * 100) : null;
+                const suggestedLabel = discount === null ? '' : /\d+%\s*off/i.test(course.offerLabel || '')
+                  ? course.offerLabel.replace(/\d+%\s*off/i, `${discount}% off`)
+                  : `Introductory offer · ${discount}% off`;
+
+                return (
+                  <div key={course.id} className="bg-white p-6 rounded-sm shadow-sm border border-silver/30">
+                    <div className="flex justify-between items-start mb-4">
+                      <h3 className="text-lg font-bold font-heading">{course.title} (ID: {course.id})</h3>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <label className={labelClass}>Title</label>
+                        <input type="text" value={course.title || ''} onChange={e => updateCourse(idx, 'title', e.target.value)} className={inputClass} />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Level</label>
+                        <input type="text" value={course.level || ''} onChange={e => updateCourse(idx, 'level', e.target.value)} className={inputClass} />
+                      </div>
+                      <div className="col-span-2">
+                        <label className={labelClass}>Description</label>
+                        <textarea value={course.desc || ''} onChange={e => updateCourse(idx, 'desc', e.target.value)} className={inputClass} rows={2} />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Duration</label>
+                        <input type="text" value={course.duration || ''} onChange={e => updateCourse(idx, 'duration', e.target.value)} className={inputClass} />
+                      </div>
+                      <div>
+                        <label className={labelClass}>Date / Cohort</label>
+                        <input type="text" value={course.date || ''} onChange={e => updateCourse(idx, 'date', e.target.value)} className={inputClass} />
+                      </div>
+                    </div>
+
+                    <div className="mt-6 pt-5 border-t border-silver/20">
+                      <h4 className="text-sm font-bold text-ink mb-3 flex items-center gap-2"><IndianRupee size={14} className="text-primary" /> Pricing</h4>
+                      <div className="grid md:grid-cols-3 gap-4">
+                        <div>
+                          <label className={labelClass}>Price (charged at checkout) *</label>
+                          <input type="text" value={course.price || ''} onChange={e => updateCourse(idx, 'price', e.target.value)} placeholder="e.g. INR 2,499" className={inputClass} />
+                        </div>
+                        <div>
+                          <label className={labelClass}>Original price (shown struck through)</label>
+                          <input type="text" value={course.originalPrice || ''} onChange={e => updateCourse(idx, 'originalPrice', e.target.value)} placeholder="Optional, e.g. INR 4,999" className={inputClass} />
+                        </div>
+                        <div>
+                          <label className={labelClass}>Offer label</label>
+                          <input type="text" value={course.offerLabel || ''} onChange={e => updateCourse(idx, 'offerLabel', e.target.value)} placeholder="Optional, e.g. Introductory offer · 50% off" className={inputClass} />
+                        </div>
+                      </div>
+
+                      <div className="mt-3 flex flex-wrap items-center gap-3 text-xs">
+                        {!(price > 0) && <span className="text-red-600 font-bold">Price needs an amount (e.g. INR 2,499), otherwise checkout cannot charge for this course.</span>}
+                        {discount !== null ? (
+                          <>
+                            <span className="text-ink/70">Calculated discount: <strong className="text-primary">{discount}% off</strong></span>
+                            {course.offerLabel !== suggestedLabel && (
+                              <button type="button" onClick={() => updateCourse(idx, 'offerLabel', suggestedLabel)} className="px-3 py-1 rounded-sm border border-primary/30 text-primary font-bold hover:bg-primary/5 transition-colors">
+                                Set label to "{suggestedLabel}"
+                              </button>
+                            )}
+                          </>
+                        ) : course.originalPrice ? (
+                          <span className="text-yellow-700 font-medium">Original price should be higher than the price, or leave it empty.</span>
+                        ) : (
+                          <span className="text-silver">Leave Original price and Offer label empty to show only the price.</span>
+                        )}
+                      </div>
+
+                      <div className="mt-4 p-4 bg-silver-light/30 border border-silver/20 rounded-sm">
+                        <div className="text-[10px] text-silver uppercase tracking-wider font-bold mb-1">Preview · Tuition Investment</div>
+                        <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                          {course.originalPrice && <span className="text-base font-medium text-silver line-through">{course.originalPrice}</span>}
+                          <span className="text-2xl font-bold text-ink">{course.price || '—'}</span>
+                        </div>
+                        {course.offerLabel && <div className="mt-1 text-sm font-semibold text-primary">{course.offerLabel}</div>}
+                      </div>
+                    </div>
+
+                    <div className="mt-6 pt-5 border-t border-silver/20">
+                      <h4 className="text-sm font-bold text-ink mb-1 flex items-center gap-2"><Calendar size={14} className="text-primary" /> Sessions</h4>
+                      <p className="text-xs text-silver mb-3">Students must pick one of these at enrolment. Each session disappears from enrolment automatically after its last day (India time). Leave empty if this course has no session choice.</p>
+                      {(course.sessions || []).length > 0 && (
+                        <div className="hidden md:grid grid-cols-[1fr_1fr_10rem_2.5rem] gap-3 mb-1 text-[10px] font-bold uppercase tracking-wider text-silver">
+                          <span>University / venue</span><span>Dates shown to students</span><span>Last day</span><span />
+                        </div>
+                      )}
+                      <div className="space-y-3">
+                        {(course.sessions || []).map((session: any, sIdx: number) => {
+                          const updateSession = (field: 'name' | 'dates' | 'endDate', value: string) => updateCourse(idx, 'sessions',
+                            course.sessions.map((s: any, i: number) => i === sIdx ? { ...s, [field]: value } : s));
+                          const hasEnd = /^\d{4}-\d{2}-\d{2}$/.test(session.endDate || '');
+                          const ended = hasEnd && session.endDate < today;
+                          const endLabel = hasEnd ? new Date(`${session.endDate}T00:00:00`).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '';
+                          return (
+                            <div key={sIdx}>
+                              <div className="grid md:grid-cols-[1fr_1fr_10rem_2.5rem] gap-3 items-center">
+                                <input type="text" value={session.name || ''} onChange={e => updateSession('name', e.target.value)} placeholder="University / venue, e.g. SK University" className={inputClass} />
+                                <input type="text" value={session.dates || ''} onChange={e => updateSession('dates', e.target.value)} placeholder="Dates, e.g. Oct 16, Oct 17" className={inputClass} />
+                                <input type="date" value={session.endDate || ''} onChange={e => updateSession('endDate', e.target.value)} aria-label="Last day" title="Hidden from enrolment after this day" className={inputClass} />
+                                <button type="button" onClick={() => updateCourse(idx, 'sessions', course.sessions.filter((_: any, i: number) => i !== sIdx))} aria-label={`Remove ${session.name || 'session'}`} className="p-2 text-silver hover:text-red-600 transition-colors justify-self-start">
+                                  <Trash2 size={16} />
+                                </button>
+                              </div>
+                              <p className={`mt-1 text-xs font-medium ${ended ? 'text-red-600' : hasEnd ? 'text-green-700' : 'text-silver'}`}>
+                                {ended ? `Ended ${endLabel} · hidden from enrolment` : hasEnd ? `Live · shown at enrolment until ${endLabel}` : 'No last day set · always shown'}
+                              </p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <button type="button" onClick={() => updateCourse(idx, 'sessions', [...(course.sessions || []), { name: '', dates: '', endDate: '' }])} className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-sm border border-primary/30 text-primary text-xs font-bold hover:bg-primary/5 transition-colors">
+                        <Plus size={14} /> Add session
+                      </button>
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-xs font-bold text-silver mb-1">Price</label>
-                    <input type="text" value={course.price} onChange={e => { const newDb = {...db}; newDb.courses[idx].price = e.target.value; setDb(newDb); }} className="w-full p-2 border border-silver/30 rounded-sm text-sm" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-silver mb-1">Date / Cohort</label>
-                    <input type="text" value={course.date} onChange={e => { const newDb = {...db}; newDb.courses[idx].date = e.target.value; setDb(newDb); }} className="w-full p-2 border border-silver/30 rounded-sm text-sm" />
-                  </div>
-                  <div>
-                    <label className="block text-xs font-bold text-silver mb-1">Level</label>
-                    <input type="text" value={course.level} onChange={e => { const newDb = {...db}; newDb.courses[idx].level = e.target.value; setDb(newDb); }} className="w-full p-2 border border-silver/30 rounded-sm text-sm" />
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
+                );
+              })}
+            </div>
+          );
+        })()}
 
         {/* Media Editor */}
         {activeTab === 'media' && (
@@ -409,7 +550,7 @@ export function Admin() {
                           <div className="text-sm text-ink"><span className="font-bold">Education:</span> {reg.education}</div>
                           <div className="text-sm text-ink"><span className="font-bold">College:</span> {reg.college}</div>
                           <div className="text-sm text-ink"><span className="font-bold">Location:</span> {reg.city}, {reg.state}, {reg.country}</div>
-                          <div className="text-sm text-ink"><span className="font-bold">Status:</span> {reg.status}</div>
+                          <div className="text-sm text-ink"><span className="font-bold">Status:</span> {reg.role || reg.status}</div>
                         </div>
                         
                         <div className="space-y-2">
@@ -580,6 +721,7 @@ export function Admin() {
                               {d.track && (
                                 <span className="inline-block mt-1.5 px-2 py-0.5 bg-primary/10 text-primary text-xs font-bold rounded-full">{d.track}</span>
                               )}
+                              {d.session && <div className="mt-1.5 text-xs text-ink/70 flex items-center gap-1"><Calendar size={11} className="text-primary" /> {d.session}</div>}
                             </td>
 
                             {/* Amount */}
@@ -619,6 +761,77 @@ export function Admin() {
                       })}
                     </tbody>
                   </table>
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
+        {/* Invoices Viewer */}
+        {activeTab === 'invoices' && (() => {
+          const invoices = [...(db.invoices || [])].reverse();
+          const paid = invoices.filter((invoice: any) => invoice.status === 'Paid');
+          const unpaid = invoices.filter((invoice: any) => invoice.status !== 'Paid');
+          return (
+            <div className="space-y-6">
+              <div className="grid grid-cols-3 gap-4">
+                {[
+                  { label: 'Total Invoices', value: invoices.length, color: 'border-silver/30 text-ink' },
+                  { label: 'Paid', value: paid.length, color: 'border-green-200 text-green-600' },
+                  { label: 'Unpaid', value: unpaid.length, color: 'border-yellow-200 text-yellow-600' },
+                ].map(stat => (
+                  <div key={stat.label} className={`bg-white border rounded-sm p-5 shadow-sm ${stat.color.split(' ')[0]}`}>
+                    <div className={`text-2xl font-bold font-heading ${stat.color.split(' ')[1]}`}>{stat.value}</div>
+                    <div className={`text-xs font-bold uppercase tracking-wider mt-1 ${stat.color.split(' ')[1]} opacity-80`}>{stat.label}</div>
+                  </div>
+                ))}
+              </div>
+
+              {invoices.length === 0 ? (
+                <div className="bg-white border border-silver/30 rounded-sm p-16 text-center text-silver shadow-sm">
+                  <FileText size={48} className="mx-auto mb-4 opacity-30" />
+                  <p className="font-medium">No invoices created yet.</p>
+                </div>
+              ) : (
+                <div className="bg-white border border-silver/20 rounded-sm shadow-sm overflow-hidden">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead className="bg-silver-light/30 border-b border-silver/20">
+                        <tr>
+                          <th className="text-left px-5 py-4 font-bold">Invoice</th>
+                          <th className="text-left px-5 py-4 font-bold">Customer</th>
+                          <th className="text-left px-5 py-4 font-bold">Order</th>
+                          <th className="text-left px-5 py-4 font-bold">Amount</th>
+                          <th className="text-left px-5 py-4 font-bold">Status</th>
+                          <th className="text-left px-5 py-4 font-bold">Created</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-silver/10">
+                        {invoices.map((invoice: any) => (
+                          <tr key={invoice.id} className="hover:bg-silver-light/20">
+                            <td className="px-5 py-4 font-mono font-bold text-primary">{invoice.invoiceNumber || invoice.id}</td>
+                            <td className="px-5 py-4">
+                              <div className="font-bold text-ink">{invoice.customer?.name || '—'}</div>
+                              <div className="text-xs text-silver">{invoice.customer?.email || '—'}</div>
+                              {invoice.customer?.session && <div className="text-xs text-ink/70 mt-1">Session: {invoice.customer.session}</div>}
+                            </td>
+                            <td className="px-5 py-4 font-mono text-xs text-ink/70">{invoice.orderId || '—'}</td>
+                            <td className="px-5 py-4 font-bold">₹{Number(invoice.amountINR || 0).toLocaleString('en-IN')}</td>
+                            <td className="px-5 py-4">
+                              <span className={`inline-flex items-center gap-2 px-3 py-1 rounded-full border text-xs font-bold ${invoice.status === 'Paid' ? 'bg-green-100 text-green-800 border-green-200' : 'bg-yellow-100 text-yellow-800 border-yellow-200'}`}>
+                                <span className={`w-2 h-2 rounded-full ${invoice.status === 'Paid' ? 'bg-green-500' : 'bg-yellow-500'}`}></span>
+                                {invoice.status || 'Unpaid'}
+                              </span>
+                              <button onClick={() => handleInvoiceDownload(invoice)} className="block mt-2 text-xs font-bold text-primary hover:text-primary-dark">
+                                Download PDF
+                              </button>
+                            </td>
+                            <td className="px-5 py-4 text-xs text-silver">{invoice.createdAt ? new Date(invoice.createdAt).toLocaleString('en-IN') : '—'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
               )}
             </div>
